@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ray 記帳本</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#c79b55" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+
+</head>
+<body>
+  <main class="app">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">Ray Money Book</p>
+        <h1>我的記帳本</h1>
+        <p class="subtitle">每天一點點，慢慢把錢看清楚 ✨</p>
+      </div>
+    </section>
+
+
+    <nav class="tab-nav" aria-label="主要功能分頁">
+      <button type="button" class="tab-button active" data-tab="book">📝<span>記帳</span></button>
+      <button type="button" class="tab-button" data-tab="stats">📊<span>統計</span></button>
+      <button type="button" class="tab-button" data-tab="loan">💳<span>還款</span></button>
+      <button type="button" class="tab-button" data-tab="backup">⚙️<span>備份</span></button>
+    </nav>
+
+    <section class="summary-card tab-page active" data-tab-page="book">
+      <div class="month-row">
+        <label for="monthFilter">查看月份</label>
+        <input type="text" id="monthFilter" class="month-picker-input" readonly />
+      </div>
+
+      <div class="balance-box">
+        <p>本月結餘</p>
+        <h2 id="balanceAmount">$0</h2>
+      </div>
+
+      <div class="summary-grid">
+        <div>
+          <span>收入</span>
+          <strong class="income" id="incomeAmount">$0</strong>
+        </div>
+        <div>
+          <span>支出</span>
+          <strong class="expense" id="expenseAmount">$0</strong>
+        </div>
+      </div>
+
+      <p class="top-category" id="topCategory">本月最大支出分類：尚無資料</p>
+    </section>
+
+    <section class="loan-card tab-page" data-tab-page="loan">
+      <div class="loan-title">
+        <h2>還款管理</h2>
+        <p>管理信用卡分期、車貸、信貸，並用打卡方式追蹤還款進度。</p>
+      </div>
+
+      <div class="loan-summary-grid">
+        <div>
+          <span>每月預估要繳</span>
+          <strong id="debtMonthlyTotal">$0</strong>
+        </div>
+        <div>
+          <span>還款項目</span>
+          <strong id="debtCount">0 筆</strong>
+        </div>
+      </div>
+
+      <div class="debt-list-title">
+        <h3>還款進度表</h3>
+        <p>點項目可展開完整資訊，按「本期已繳」會自動增加一期。</p>
+      </div>
+
+      <div id="debtList" class="debt-list"></div>
+
+      <button class="add-debt-open-btn" type="button" id="openDebtModalBtn">
+        ＋ 新增還款項目
+      </button>
+    </section>
+
+<section class="form-card tab-page active" data-tab-page="book">
+      <h2>新增一筆</h2>
+
+      <form id="recordForm">
+        <div class="type-tabs">
+          <label>
+            <input type="radio" name="type" value="expense" checked />
+            <span>支出</span>
+          </label>
+          <label>
+            <input type="radio" name="type" value="income" />
+            <span>收入</span>
+          </label>
+        </div>
+
+        <label class="field">
+          <span>金額</span>
+          <input type="number" id="amount" placeholder="例如：120" min="1" required />
+        </label>
+
+        <div class="field">
+          <span>分類</span>
+          <input type="hidden" id="category" />
+          <input type="hidden" id="subCategory" />
+          <button type="button" id="categoryButton" class="category-trigger">
+            <span id="categoryButtonText">選擇分類</span>
+            <b>›</b>
+          </button>
+        </div>
+
+        <label class="field">
+          <span>日期</span>
+          <input type="text" id="date" class="date-picker-input" placeholder="選擇日期" readonly required />
+        </label>
+
+        <label class="field">
+          <span>備註</span>
+          <input type="text" id="note" placeholder="例如：晚餐、油錢、薪水" />
+        </label>
+
+        <button class="primary-btn" type="submit">新增記錄</button>
+      </form>
+    </section>
+
+    
+    <section class="summary-card tab-page" data-tab-page="stats">
+      <div class="stats-page-head">
+        <div>
+          <h2>統計總覽</h2>
+          <p>用月份查看收支變化，快速掌握整體財務與還款狀況。</p>
+        </div>
+        <label class="month-pill">
+          <span>查看月份</span>
+          <input type="text" id="statsMonthFilter" class="month-picker-input" readonly />
+        </label>
+      </div>
+
+      <div class="stats-hero">
+        <span>本月結餘</span>
+        <strong id="statsBalanceAmount">$0</strong>
+        <small id="statsHeroHint">收入扣除支出後的剩餘金額</small>
+      </div>
+
+      <div class="summary-grid stats-summary-grid">
+        <div class="summary-box income-box">
+          <span>收入</span>
+          <strong id="statsIncomeAmount">$0</strong>
+        </div>
+        <div class="summary-box expense-box">
+          <span>支出</span>
+          <strong id="statsExpenseAmount">$0</strong>
+        </div>
+        <div class="summary-box">
+          <span>本月最大支出分類</span>
+          <strong id="statsTopCategory">尚無資料</strong>
+        </div>
+        <div class="summary-box">
+          <span>收支狀態</span>
+          <strong id="statsStatus">尚無資料</strong>
+        </div>
+      </div>
+
+      <div class="stats-insight-card">
+        <div>
+          <span>支出占收入比例</span>
+          <strong id="expenseRate">0%</strong>
+        </div>
+        <div class="stats-mini-progress">
+          <div id="expenseRateBar"></div>
+        </div>
+        <p id="statsInsightText">有資料後，這裡會幫你看本月花費壓力。</p>
+      </div>
+    </section>
+
+    <section class="asset-panel tab-page" data-tab-page="stats">
+      <div class="chart-title">
+        <div>
+          <h2>資產盤點</h2>
+          <p>快速查看目前的累積淨資產、收入、支出與本月現金流，讓整體財務狀況一目了然。</p>
+        </div>
+      </div>
+
+      <div class="stats-asset-grid">
+        <div class="asset-box asset-hero-box">
+          <span>累積淨資產</span>
+          <strong id="assetTotalBalance">$0</strong>
+          <small id="assetBalanceHint">依照累積收入與支出估算目前的淨資產變化</small>
+        </div>
+
+        <div class="summary-box">
+          <span>累積收入</span>
+          <strong id="assetTotalIncome">$0</strong>
+        </div>
+
+        <div class="summary-box">
+          <span>累積支出</span>
+          <strong id="assetTotalExpense">$0</strong>
+        </div>
+
+        <div class="summary-box">
+          <span>本月現金流</span>
+          <strong id="assetMonthBalance">$0</strong>
+        </div>
+      </div>
+
+      <div class="stats-insight-card asset-health-card">
+        <div>
+          <span>資產累積率</span>
+          <strong id="savingRate">0%</strong>
+        </div>
+        <div class="stats-mini-progress">
+          <div id="savingRateBar"></div>
+        </div>
+        <p id="assetInsightText">有資料後，這裡會幫你整理資產累積狀況。</p>
+      </div>
+    </section>
+
+    <section class="liability-card tab-page" data-tab-page="stats">
+      <div class="chart-title">
+        <div>
+          <h2>負債進度</h2>
+          <p>整合還款項目的剩餘金額與進度條，快速看目前負債狀況。</p>
+        </div>
+      </div>
+
+      <div class="summary-grid stats-summary-grid liability-summary-grid">
+        <div class="summary-box">
+          <span>總剩餘負債</span>
+          <strong id="liabilityRemainingTotal">$0</strong>
+        </div>
+        <div class="summary-box">
+          <span>累積已繳</span>
+          <strong id="liabilityPaidTotal">$0</strong>
+        </div>
+        <div class="summary-box">
+          <span>整體進度</span>
+          <strong id="liabilityProgressText">0%</strong>
+        </div>
+        <div class="summary-box">
+          <span>還款項目</span>
+          <strong id="liabilityItemCount">0 筆</strong>
+        </div>
+      </div>
+
+      <div class="stats-insight-card liability-overall-card">
+        <div>
+          <span>還款進度條</span>
+          <strong id="liabilityOverallPercent">0%</strong>
+        </div>
+        <div class="stats-mini-progress">
+          <div id="liabilityOverallBar"></div>
+        </div>
+        <p id="liabilityOverallHint">目前還沒有還款項目。</p>
+      </div>
+
+      <div id="statsDebtProgressList" class="stats-debt-progress-list"></div>
+    </section>
+
+
+    
+
+    
+
+    <section class="stats-rank-card tab-page" data-tab-page="stats">
+      <div class="chart-title">
+        <div>
+          <h2>支出排行</h2>
+          <p>快速看出本月錢主要花在哪裡。</p>
+        </div>
+      </div>
+      <div id="categoryRankList" class="category-rank-list"></div>
+    </section>
+
+
+    <section class="tool-card tab-page" data-tab-page="backup">
+      <h2>資料備份</h2>
+      <p>資料存在這台手機的瀏覽器裡。換手機或清除瀏覽器資料前，建議先匯出備份。</p>
+
+      <div class="tool-buttons">
+        <button type="button" id="exportBtn">匯出備份</button>
+        <button type="button" id="importBtn">匯入備份</button>
+      </div>
+
+      <input type="file" id="importFile" accept=".json" hidden />
+    </section>
+
+    <section class="list-card tab-page active" data-tab-page="book">
+      <div class="list-title">
+        <h2>本月紀錄</h2>
+        <button type="button" id="clearMonthBtn">清空本月</button>
+      </div>
+
+      <div id="recordList" class="record-list"></div>
+    </section>
+  </main>
+
+  <div id="debtModal" class="debt-modal-overlay" hidden>
+    <div class="debt-modal-sheet">
+      <div class="debt-modal-header">
+        <div>
+          <h3>新增還款項目</h3>
+          <p>輸入資料後會自動計算還款進度。</p>
+        </div>
+        <button type="button" id="debtModalClose" class="debt-modal-close">×</button>
+      </div>
+
+      <div class="loan-form">
+        <h3>新增還款項目</h3>
+
+        <label class="field">
+          <span>還款類型</span>
+          <div class="select-wrap">
+            <select id="debtType" class="native-select">
+              <option value="creditCard">信用卡分期</option>
+              <option value="creditRevolving">信用卡卡循</option>
+              <option value="carLoan">車貸</option>
+              <option value="personalLoan">信貸</option>
+              <option value="otherLoan">其他貸款</option>
+            </select>
+          </div>
+        </label>
+
+        <label class="field">
+          <span>名稱</span>
+          <input type="text" id="debtName" placeholder="例如：玉山信用卡、車貸、信貸" />
+        </label>
+
+        <div id="creditCardFields" class="debt-fields">
+          <label class="field">
+            <span>刷卡金額</span>
+            <input type="number" id="creditAmount" placeholder="例如：12000" min="1" />
+          </label>
+
+          <label class="field">
+            <span>期數</span>
+            <input type="number" id="creditInstallments" placeholder="例如：12" min="1" />
+          </label>
+
+          <label class="field">
+            <span>已繳期數</span>
+            <input type="number" id="creditPaidPeriods" placeholder="例如：0" min="0" value="0" />
+          </label>
+
+          <div class="calc-preview" id="creditPreview">輸入金額與期數後，會自動計算每期金額。</div>
+        </div>
+
+        <div id="revolvingFields" class="debt-fields" hidden>
+          <label class="field">
+            <span>當期帳單金額</span>
+            <input type="number" id="revolvingPrincipal" placeholder="例如：40000" min="0" />
+          </label>
+
+          <label class="field">
+            <span>年利率 %</span>
+            <input type="number" id="revolvingAnnualRate" placeholder="例如：15" min="0" step="0.01" />
+          </label>
+
+          <label class="field">
+            <span>計息天數</span>
+            <input type="number" id="revolvingInterestDays" placeholder="例如：30" min="1" value="30" />
+          </label>
+
+          <label class="field">
+            <span>當期已繳金額</span>
+            <input type="number" id="revolvingPayment" placeholder="例如：9000" min="0" />
+          </label>
+
+          <label class="field">
+            <span>連動信用卡卡名</span>
+            <input type="text" id="revolvingLinkedSubCategory" placeholder="例如：玉山卡、J卡、信用卡" />
+            <small>記帳時選「信用卡支出」，小分類填一樣名稱，會自動連動到這張卡。</small>
+          </label>
+
+          <div class="calc-preview" id="revolvingPreview">輸入未繳本金、年利率與本期繳款後，會自動計算循環利息。</div>
+        </div>
+
+        <div id="loanFormulaFields" class="debt-fields" hidden>
+          <label class="field">
+            <span>貸款金額</span>
+            <input type="number" id="loanPrincipal" placeholder="例如：500000" min="1" />
+          </label>
+
+          <label class="field">
+            <span>年利率 %</span>
+            <input type="number" id="loanAnnualRate" placeholder="例如：3.5" min="0" step="0.01" />
+          </label>
+
+          <label class="field">
+            <span>每月還款金額</span>
+            <input type="number" id="loanMonthlyPayment" placeholder="例如：10000" min="1" />
+          </label>
+
+          <label class="field">
+            <span>已繳期數</span>
+            <input type="number" id="loanPaidPeriods" placeholder="例如：6" min="0" value="0" />
+          </label>
+
+          <div class="calc-preview" id="loanPreview">輸入貸款資料後，會自動估算剩餘本金與期數。</div>
+        </div>
+
+        <button class="primary-btn" type="button" id="addDebtBtn">新增還款項目</button>
+      </div>
+
+      <button type="button" id="debtModalCancel" class="debt-modal-cancel">取消</button>
+    </div>
+  </div>
+
+  <div id="menuOverlay" class="menu-overlay" hidden>
+    <div class="menu-sheet">
+      <div class="menu-header">
+        <button type="button" id="menuBackBtn" class="menu-back">‹</button>
+        <div>
+          <h3 id="menuTitle">選擇分類</h3>
+          <p id="menuSubtitle">先選大分類，再選小分類</p>
+        </div>
+        <button type="button" id="menuCloseBtn" class="menu-close">×</button>
+      </div>
+
+      <div id="menuList" class="menu-list"></div>
+
+      <div id="addSubCategoryBox" class="add-box" hidden>
+        <input type="text" id="newSubCategoryInput" placeholder="輸入新的小分類，例如：車貸" />
+        <button type="button" id="saveSubCategoryBtn">新增</button>
+      </div>
+    </div>
+  </div>
+
+
+
+  <div id="monthPickerOverlay" class="app-dialog-overlay month-picker-overlay" hidden>
+    <div class="app-dialog-card month-picker-card" role="dialog" aria-modal="true" aria-labelledby="monthPickerTitle">
+      <div class="app-dialog-head month-picker-head">
+        <div>
+          <h3 id="monthPickerTitle">選擇月份</h3>
+          <p>切換年份後，點一下月份就會套用。</p>
+        </div>
+      </div>
+
+      <div class="month-year-switch">
+        <button type="button" id="monthPrevYear" class="month-nav-btn">‹</button>
+        <strong id="monthPickerYearLabel">2026 年</strong>
+        <button type="button" id="monthNextYear" class="month-nav-btn">›</button>
+      </div>
+
+      <div id="monthPickerGrid" class="month-picker-grid"></div>
+
+      <div class="app-dialog-actions">
+        <button type="button" id="monthPickerCancel" class="app-dialog-btn secondary">取消</button>
+      </div>
+    </div>
+  </div>
+
+
+  <div id="datePickerOverlay" class="app-dialog-overlay date-picker-overlay" hidden>
+    <div class="app-dialog-card date-picker-card" role="dialog" aria-modal="true" aria-labelledby="datePickerTitle">
+      <div class="app-dialog-head date-picker-head">
+        <div>
+          <h3 id="datePickerTitle">選擇日期</h3>
+          <p id="datePickerSummary">2026年06月25日</p>
+        </div>
+      </div>
+
+      <div class="date-picker-switch">
+        <button type="button" id="datePrevMonth" class="month-nav-btn">‹</button>
+        <strong id="datePickerMonthLabel">2026 年 06 月</strong>
+        <button type="button" id="dateNextMonth" class="month-nav-btn">›</button>
+      </div>
+
+      <div class="date-weekdays">
+        <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+      </div>
+      <div id="datePickerGrid" class="date-picker-grid"></div>
+
+      <div class="app-dialog-actions">
+        <button type="button" id="datePickerToday" class="app-dialog-btn secondary">今天</button>
+        <button type="button" id="datePickerCancel" class="app-dialog-btn secondary">取消</button>
+      </div>
+    </div>
+  </div>
+
+
+  <div id="appDialog" class="app-dialog-overlay" hidden>
+    <div class="app-dialog-card" role="dialog" aria-modal="true" aria-labelledby="appDialogTitle">
+      <div class="app-dialog-head">
+        <h3 id="appDialogTitle">提示</h3>
+      </div>
+      <div class="app-dialog-body">
+        <p id="appDialogMessage">訊息內容</p>
+      </div>
+      <div id="appDialogActions" class="app-dialog-actions">
+        <button type="button" id="appDialogCancel" class="app-dialog-btn secondary">取消</button>
+        <button type="button" id="appDialogConfirm" class="app-dialog-btn primary">確定</button>
+      </div>
+    </div>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>
