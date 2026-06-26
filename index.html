@@ -70,6 +70,32 @@
         </div>
       </div>
 
+      <section class="credit-detail-card">
+        <div class="credit-detail-head">
+          <div>
+            <h3>信用卡消費明細</h3>
+            <p>自動整理帳戶類型為信用卡的支出，依每張卡查看日期、金額與備註。</p>
+          </div>
+          <label class="month-pill credit-detail-month">
+            <span>查看月份</span>
+            <input type="text" id="creditDetailMonthFilter" class="month-picker-input" readonly />
+          </label>
+        </div>
+
+        <div class="credit-detail-summary">
+          <div>
+            <span>本月刷卡總額</span>
+            <strong id="creditDetailTotal">$0</strong>
+          </div>
+          <div>
+            <span>信用卡筆數</span>
+            <strong id="creditDetailCount">0 筆</strong>
+          </div>
+        </div>
+
+        <div id="creditCardDetailList" class="credit-card-detail-list"></div>
+      </section>
+
       <div class="debt-list-title">
         <h3>還款進度表</h3>
         <p>點項目可展開完整資訊，按「本期已繳」會自動增加一期。</p>
@@ -111,6 +137,16 @@
             <b>›</b>
           </button>
         </div>
+
+        <label class="field">
+          <span>帳戶</span>
+          <input type="hidden" id="accountSelect" value="cash_wallet" />
+          <button type="button" id="accountSelectButton" class="custom-select-trigger">
+            <span id="accountSelectButtonText">現金錢包｜現金</span>
+            <b>⌄</b>
+          </button>
+          <small class="field-hint">這筆錢是從哪裡來，或要記在哪個位置。</small>
+        </label>
 
         <label class="field">
           <span>日期</span>
@@ -288,6 +324,47 @@
       <input type="file" id="importFile" accept=".json" hidden />
     </section>
 
+    <section class="account-card tab-page active" data-tab-page="book">
+      <button type="button" id="accountPanelToggle" class="account-panel-toggle" aria-expanded="false">
+        <span>
+          <strong>帳戶管理</strong>
+          <small>新增、編輯現金錢包、存錢筒、信用卡等資金位置</small>
+        </span>
+        <b>⌄</b>
+      </button>
+
+      <div id="accountPanelBody" class="account-panel-body" hidden>
+        <div class="account-form">
+          <label class="field">
+            <span>帳戶名稱</span>
+            <input type="text" id="accountNameInput" placeholder="例如：現金錢包、存錢筒、玉山信用卡" />
+          </label>
+
+          <label class="field">
+            <span>帳戶類型</span>
+            <input type="hidden" id="accountTypeSelect" value="cash" />
+            <button type="button" id="accountTypeButton" class="custom-select-trigger">
+              <span id="accountTypeButtonText">現金</span>
+              <b>⌄</b>
+            </button>
+          </label>
+
+          <label class="field">
+            <span>初始金額</span>
+            <input type="number" id="accountInitialInput" value="0" step="1" />
+            <small class="field-hint">現金、銀行、存錢可填目前餘額；信用卡可填目前待繳金額。</small>
+          </label>
+
+          <div class="account-form-actions">
+            <button type="button" id="saveAccountBtn" class="primary-btn">新增帳戶</button>
+            <button type="button" id="cancelAccountEditBtn" class="secondary-record-btn" hidden>取消修改</button>
+          </div>
+        </div>
+
+        <div id="accountList" class="account-list"></div>
+      </div>
+    </section>
+
     <section class="list-card tab-page active" data-tab-page="book">
       <div class="list-title">
         <h2>本月紀錄</h2>
@@ -296,6 +373,9 @@
 
       <div id="recordList" class="record-list"></div>
     </section>
+
+
+
   </main>
 
   <div id="debtModal" class="debt-modal-overlay" hidden>
@@ -426,6 +506,22 @@
         <input type="text" id="newSubCategoryInput" placeholder="輸入新的小分類，例如：車貸" />
         <button type="button" id="saveSubCategoryBtn">新增</button>
       </div>
+    </div>
+  </div>
+
+
+
+  <div id="customSelectOverlay" class="menu-overlay custom-select-overlay" hidden>
+    <div class="menu-sheet custom-select-sheet">
+      <div class="custom-select-header">
+        <div>
+          <h3 id="customSelectTitle">選擇項目</h3>
+          <p id="customSelectSubtitle">請選擇一個選項</p>
+        </div>
+        <button type="button" id="customSelectClose" class="menu-close">×</button>
+      </div>
+
+      <div id="customSelectList" class="menu-list custom-select-list"></div>
     </div>
   </div>
 

@@ -1,6 +1,8 @@
 const STORAGE_KEY = "ray_money_book_records_v1";
 const DEBT_STORAGE_KEY = "ray_money_book_debts_v1";
 const FOLDER_CATEGORY_STORAGE_KEY = "ray_money_book_folder_categories_v1";
+const ACCOUNT_STORAGE_KEY = "ray_money_book_accounts_v1";
+
 
 const defaultFolderCategories = {
   expense: {
@@ -26,6 +28,21 @@ const defaultFolderCategories = {
   }
 };
 
+const defaultAccounts = [
+  { id: "cash_wallet", name: "現金錢包", type: "cash", initialBalance: 0, createdAt: "default" },
+  { id: "bank_account", name: "銀行帳戶", type: "bank", initialBalance: 0, createdAt: "default" },
+  { id: "saving_jar", name: "存錢筒", type: "saving", initialBalance: 0, createdAt: "default" },
+  { id: "credit_card", name: "信用卡", type: "credit", initialBalance: 0, createdAt: "default" }
+];
+
+const accountTypeLabels = {
+  cash: "現金",
+  bank: "銀行",
+  saving: "存錢",
+  credit: "信用卡",
+  other: "其他"
+};
+
 const chartColors = [
   "#c79b55",
   "#a97838",
@@ -43,8 +60,12 @@ const chartColors = [
 
 let records = loadRecords();
 let debts = loadDebts();
+let accounts = loadAccounts();
 let folderCategories = loadFolderCategories();
 let menuParentCategory = "";
+let editingRecordId = null;
+let editingAccountId = null;
+
 
 const recordForm = document.getElementById("recordForm");
 const amountInput = document.getElementById("amount");
@@ -52,6 +73,12 @@ const categoryInput = document.getElementById("category");
 const subCategoryInput = document.getElementById("subCategory");
 const categoryButton = document.getElementById("categoryButton");
 const categoryButtonText = document.getElementById("categoryButtonText");
+const accountSelect = document.getElementById("accountSelect");
+const accountSelectButton = document.getElementById("accountSelectButton");
+const accountSelectButtonText = document.getElementById("accountSelectButtonText");
+const recordSubmitBtn = recordForm ? recordForm.querySelector(".primary-btn") : null;
+const recordFormTitle = document.querySelector(".form-card h2");
+let cancelEditRecordBtn = null;
 
 const menuOverlay = document.getElementById("menuOverlay");
 const menuTitle = document.getElementById("menuTitle");
@@ -107,6 +134,17 @@ const importBtn = document.getElementById("importBtn");
 const importFile = document.getElementById("importFile");
 const clearMonthBtn = document.getElementById("clearMonthBtn");
 
+const accountPanelToggle = document.getElementById("accountPanelToggle");
+const accountPanelBody = document.getElementById("accountPanelBody");
+const accountList = document.getElementById("accountList");
+const accountNameInput = document.getElementById("accountNameInput");
+const accountTypeSelect = document.getElementById("accountTypeSelect");
+const accountTypeButton = document.getElementById("accountTypeButton");
+const accountTypeButtonText = document.getElementById("accountTypeButtonText");
+const accountInitialInput = document.getElementById("accountInitialInput");
+const saveAccountBtn = document.getElementById("saveAccountBtn");
+const cancelAccountEditBtn = document.getElementById("cancelAccountEditBtn");
+
 const tabButtons = document.querySelectorAll(".tab-button");
 const tabPages = document.querySelectorAll(".tab-page");
 
@@ -135,6 +173,10 @@ const addDebtBtn = document.getElementById("addDebtBtn");
 const debtMonthlyTotal = document.getElementById("debtMonthlyTotal");
 const debtCount = document.getElementById("debtCount");
 const debtList = document.getElementById("debtList");
+const creditDetailMonthFilter = document.getElementById("creditDetailMonthFilter");
+const creditDetailTotal = document.getElementById("creditDetailTotal");
+const creditDetailCount = document.getElementById("creditDetailCount");
+const creditCardDetailList = document.getElementById("creditCardDetailList");
 const openDebtModalBtn = document.getElementById("openDebtModalBtn");
 const debtModal = document.getElementById("debtModal");
 const debtModalClose = document.getElementById("debtModalClose");
@@ -145,6 +187,11 @@ const appDialogMessage = document.getElementById("appDialogMessage");
 const appDialogActions = document.getElementById("appDialogActions");
 const appDialogCancel = document.getElementById("appDialogCancel");
 const appDialogConfirm = document.getElementById("appDialogConfirm");
+const customSelectOverlay = document.getElementById("customSelectOverlay");
+const customSelectTitle = document.getElementById("customSelectTitle");
+const customSelectSubtitle = document.getElementById("customSelectSubtitle");
+const customSelectList = document.getElementById("customSelectList");
+const customSelectClose = document.getElementById("customSelectClose");
 const monthPickerOverlay = document.getElementById("monthPickerOverlay");
 const monthPickerGrid = document.getElementById("monthPickerGrid");
 const monthPickerYearLabel = document.getElementById("monthPickerYearLabel");
@@ -159,6 +206,7 @@ const datePrevMonth = document.getElementById("datePrevMonth");
 const dateNextMonth = document.getElementById("dateNextMonth");
 const datePickerCancel = document.getElementById("datePickerCancel");
 const datePickerToday = document.getElementById("datePickerToday");
+let activeCustomSelectHandler = null;
 
 
 init();
@@ -349,6 +397,7 @@ function closeMonthPicker() {
 function applySelectedMonth(rawMonth) {
   setMonthInputValue(monthFilter, rawMonth);
   if (statsMonthFilter) setMonthInputValue(statsMonthFilter, rawMonth);
+  if (creditDetailMonthFilter) setMonthInputValue(creditDetailMonthFilter, rawMonth);
   render();
 }
 
@@ -426,6 +475,9 @@ function init() {
   if (statsMonthFilter) {
     setMonthInputValue(statsMonthFilter, monthFilter.dataset.month);
   }
+  if (creditDetailMonthFilter) {
+    setMonthInputValue(creditDetailMonthFilter, monthFilter.dataset.month);
+  }
 
   document.querySelectorAll("input[name='type']").forEach((radio) => {
     radio.addEventListener("change", () => {
@@ -452,9 +504,14 @@ function init() {
   });
 
   recordForm.addEventListener("submit", addRecord);
+  setupRecordEditControls();
+  setupAccountControls();
   monthFilter.addEventListener("click", () => openMonthPicker(monthFilter));
   if (statsMonthFilter) {
     statsMonthFilter.addEventListener("click", () => openMonthPicker(statsMonthFilter));
+  }
+  if (creditDetailMonthFilter) {
+    creditDetailMonthFilter.addEventListener("click", () => openMonthPicker(creditDetailMonthFilter));
   }
 
   if (monthPrevYear) {
@@ -588,6 +645,7 @@ function addRecord(event) {
   const type = getSelectedType();
   const category = categoryInput.value;
   const subCategory = subCategoryInput.value;
+  const accountId = getSelectedAccountId();
   const date = getDateInputValue();
   const note = noteInput.value.trim();
 
@@ -601,8 +659,42 @@ function addRecord(event) {
     return;
   }
 
+  if (!accountId) {
+    customAlert("請選擇帳戶");
+    return;
+  }
+
   if (!date) {
     customAlert("請選擇日期");
+    return;
+  }
+
+  if (editingRecordId) {
+    const targetIndex = records.findIndex((record) => record.id === editingRecordId);
+
+    if (targetIndex === -1) {
+      customAlert("找不到要修改的紀錄，請重新選擇一次。", "修改失敗");
+      resetRecordEditMode();
+      return;
+    }
+
+    records[targetIndex] = {
+      ...records[targetIndex],
+      type,
+      amount,
+      category,
+      subCategory,
+      accountId,
+      date,
+      note,
+      updatedAt: new Date().toISOString()
+    };
+
+    saveRecords();
+    resetRecordFormAfterSubmit();
+    resetRecordEditMode();
+    render();
+    customAlert("這筆紀錄已更新完成", "修改完成");
     return;
   }
 
@@ -612,6 +704,7 @@ function addRecord(event) {
     amount,
     category,
     subCategory,
+    accountId,
     date,
     note,
     createdAt: new Date().toISOString()
@@ -620,9 +713,7 @@ function addRecord(event) {
   records.push(newRecord);
   saveRecords();
 
-  amountInput.value = "";
-  noteInput.value = "";
-  setDateInputValue(formatDate(new Date()));
+  resetRecordFormAfterSubmit();
 
 
   if (debtType) {
@@ -644,6 +735,68 @@ function addRecord(event) {
   updateDebtTypeFields();
 
   render();
+}
+
+function setupRecordEditControls() {
+  if (!recordForm || !recordSubmitBtn) return;
+
+  cancelEditRecordBtn = document.createElement("button");
+  cancelEditRecordBtn.type = "button";
+  cancelEditRecordBtn.className = "secondary-record-btn";
+  cancelEditRecordBtn.textContent = "取消修改";
+  cancelEditRecordBtn.hidden = true;
+  cancelEditRecordBtn.addEventListener("click", () => {
+    resetRecordFormAfterSubmit();
+    resetRecordEditMode();
+  });
+
+  recordSubmitBtn.insertAdjacentElement("afterend", cancelEditRecordBtn);
+  resetRecordEditMode();
+}
+
+function resetRecordFormAfterSubmit() {
+  amountInput.value = "";
+  noteInput.value = "";
+  setDateInputValue(formatDate(new Date()));
+  setSelectedAccount(getDefaultAccountId());
+}
+
+function resetRecordEditMode() {
+  editingRecordId = null;
+  if (recordSubmitBtn) recordSubmitBtn.textContent = "新增記錄";
+  if (recordFormTitle) recordFormTitle.textContent = "新增一筆";
+  if (cancelEditRecordBtn) cancelEditRecordBtn.hidden = true;
+}
+
+function setSelectedType(type) {
+  const radio = document.querySelector(`input[name='type'][value='${type}']`);
+  if (radio) radio.checked = true;
+}
+
+function editRecord(id) {
+  const record = records.find((item) => item.id === id);
+
+  if (!record) {
+    customAlert("找不到這筆紀錄，可能已經被刪除了。", "無法編輯");
+    return;
+  }
+
+  editingRecordId = id;
+  setSelectedType(record.type || "expense");
+  amountInput.value = record.amount || "";
+  categoryInput.value = record.category || "";
+  subCategoryInput.value = record.subCategory || "";
+  setSelectedAccount(getRecordAccountId(record));
+  setDateInputValue(record.date || formatDate(new Date()));
+  noteInput.value = record.note || "";
+  updateCategoryButtonText();
+
+  if (recordSubmitBtn) recordSubmitBtn.textContent = "儲存修改";
+  if (recordFormTitle) recordFormTitle.textContent = "修改紀錄";
+  if (cancelEditRecordBtn) cancelEditRecordBtn.hidden = false;
+
+  recordForm.scrollIntoView({ behavior: "smooth", block: "start" });
+  amountInput.focus({ preventScroll: true });
 }
 
 function openCategoryMenu() {
@@ -1006,10 +1159,13 @@ function render() {
       return b.date.localeCompare(a.date);
     });
 
+  renderAccountOptions();
   renderSummary(monthRecords);
   renderAssetDebtStats(monthRecords);
   renderList(monthRecords);
+  renderAccounts();
   renderDebts();
+  renderCreditCardDetails();
 }
 
 function renderSummary(monthRecords) {
@@ -1291,6 +1447,10 @@ function renderList(monthRecords) {
       const subCategory = record.subCategory
         ? `<span class="record-subcategory">／${escapeHtml(record.subCategory)}</span>`
         : "";
+      const account = getAccountForRecord(record);
+      const accountMeta = account
+        ? `<span class="record-account">${escapeHtml(account.name)}</span>`
+        : `<span class="record-account muted">未指定帳戶</span>`;
 
       return `
         <article class="record-item">
@@ -1301,16 +1461,21 @@ function renderList(monthRecords) {
               ${subCategory}
             </div>
             <div class="record-note">${escapeHtml(note)}</div>
-            <div class="record-date">${record.date}</div>
+            <div class="record-date">${record.date}｜${accountMeta}</div>
           </div>
 
           <div class="record-side">
             <span class="record-amount ${amountClass}">
               ${symbol}${money(record.amount)}
             </span>
-            <button class="delete-btn" type="button" onclick="deleteRecord('${record.id}')">
-              刪除
-            </button>
+            <div class="record-actions">
+              <button class="edit-btn" type="button" onclick="editRecord('${record.id}')">
+                編輯
+              </button>
+              <button class="delete-btn" type="button" onclick="deleteRecord('${record.id}')">
+                刪除
+              </button>
+            </div>
           </div>
         </article>
       `;
@@ -1325,6 +1490,11 @@ function deleteRecord(id) {
 
   records = records.filter((record) => record.id !== id);
   saveRecords();
+
+  if (editingRecordId === id) {
+    resetRecordFormAfterSubmit();
+    resetRecordEditMode();
+  }
 
   if (debtType) {
     debtType.addEventListener("change", updateDebtTypeFields);
@@ -1363,6 +1533,11 @@ function clearCurrentMonth() {
   records = records.filter((record) => !record.date.startsWith(selectedMonth));
   saveRecords();
 
+  if (editingRecordId && !records.some((record) => record.id === editingRecordId)) {
+    resetRecordFormAfterSubmit();
+    resetRecordEditMode();
+  }
+
   if (debtType) {
     debtType.addEventListener("change", updateDebtTypeFields);
   }
@@ -1387,9 +1562,10 @@ function clearCurrentMonth() {
 function exportBackup() {
   const data = {
     app: "Ray Money Book",
-    version: 8,
+    version: 9,
     exportAt: new Date().toISOString(),
     records,
+    accounts,
     folderCategories,
     debts
   };
@@ -1446,6 +1622,10 @@ function importBackup(event) {
         folderCategories = importFlatCategories(folderCategories, imported.categories);
       }
 
+      if (imported.accounts && Array.isArray(imported.accounts)) {
+        accounts = mergeAccounts(accounts, imported.accounts);
+      }
+
       if (imported.debts && Array.isArray(imported.debts)) {
         const existingDebtIds = new Set(debts.map((debt) => debt.id));
         const cleanDebts = imported.debts.filter((debt) => debt.id && !existingDebtIds.has(debt.id));
@@ -1453,6 +1633,7 @@ function importBackup(event) {
       }
 
       saveRecords();
+      saveAccounts();
       saveFolderCategories();
       saveDebts();
       render();
@@ -1466,6 +1647,472 @@ function importBackup(event) {
   };
 
   reader.readAsText(file);
+}
+
+
+function setupAccountControls() {
+  renderAccountOptions();
+  updateAccountTypeButtonText();
+
+  if (accountSelectButton) {
+    accountSelectButton.addEventListener("click", openAccountSelector);
+  }
+
+  if (accountTypeButton) {
+    accountTypeButton.addEventListener("click", openAccountTypeSelector);
+  }
+
+  if (customSelectClose) {
+    customSelectClose.addEventListener("click", closeCustomSelect);
+  }
+
+  if (customSelectOverlay) {
+    customSelectOverlay.addEventListener("click", (event) => {
+      if (event.target === customSelectOverlay) closeCustomSelect();
+    });
+  }
+
+  if (accountPanelToggle && accountPanelBody) {
+    accountPanelToggle.addEventListener("click", () => {
+      const willOpen = accountPanelBody.hidden;
+      accountPanelBody.hidden = !willOpen;
+      accountPanelToggle.setAttribute("aria-expanded", String(willOpen));
+      accountPanelToggle.querySelector("b").textContent = willOpen ? "⌃" : "⌄";
+    });
+  }
+
+  if (saveAccountBtn) {
+    saveAccountBtn.addEventListener("click", saveAccountFromForm);
+  }
+
+  if (cancelAccountEditBtn) {
+    cancelAccountEditBtn.addEventListener("click", resetAccountForm);
+  }
+}
+
+function getSelectedAccountId() {
+  return accountSelect ? accountSelect.value : getDefaultAccountId();
+}
+
+function setSelectedAccount(accountId) {
+  if (!accountSelect) return;
+  const safeId = accountId && accounts.some((account) => account.id === accountId)
+    ? accountId
+    : getDefaultAccountId();
+
+  accountSelect.value = safeId || "";
+  updateAccountSelectButtonText();
+}
+
+function getDefaultAccountId() {
+  const cash = accounts.find((account) => account.id === "cash_wallet");
+  if (cash) return cash.id;
+  return accounts[0] ? accounts[0].id : "";
+}
+
+function getRecordAccountId(record) {
+  if (record && record.accountId && accounts.some((account) => account.id === record.accountId)) {
+    return record.accountId;
+  }
+
+  if (record && record.accountName) {
+    const matched = accounts.find((account) => account.name === record.accountName);
+    if (matched) return matched.id;
+  }
+
+  return getDefaultAccountId();
+}
+
+function getAccountForRecord(record) {
+  const accountId = getRecordAccountId(record);
+  return accounts.find((account) => account.id === accountId) || null;
+}
+
+function renderAccountOptions() {
+  if (!accountSelect) return;
+  const currentValue = accountSelect.value || getDefaultAccountId();
+  setSelectedAccount(currentValue);
+}
+
+function updateAccountSelectButtonText() {
+  if (!accountSelectButtonText) return;
+  const account = accounts.find((item) => item.id === getSelectedAccountId());
+
+  if (!account) {
+    accountSelectButtonText.textContent = "選擇帳戶";
+    return;
+  }
+
+  accountSelectButtonText.textContent = `${account.name}｜${getAccountTypeLabel(account.type)}`;
+}
+
+function updateAccountTypeButtonText() {
+  if (!accountTypeButtonText || !accountTypeSelect) return;
+  accountTypeButtonText.textContent = getAccountTypeLabel(accountTypeSelect.value || "cash");
+}
+
+function openCustomSelect({ title, subtitle, options, selectedValue, onSelect }) {
+  if (!customSelectOverlay || !customSelectList) return;
+
+  activeCustomSelectHandler = typeof onSelect === "function" ? onSelect : null;
+  if (customSelectTitle) customSelectTitle.textContent = title || "選擇項目";
+  if (customSelectSubtitle) customSelectSubtitle.textContent = subtitle || "請選擇一個選項";
+
+  customSelectList.innerHTML = options
+    .map((option) => {
+      const activeClass = option.value === selectedValue ? "active" : "";
+      const subText = option.subLabel ? `<small>${escapeHtml(option.subLabel)}</small>` : "";
+      const arrow = option.value === selectedValue ? "✓" : "›";
+
+      return `
+        <button type="button" class="menu-item custom-select-option ${activeClass}" data-value="${escapeForAttribute(option.value)}">
+          <span>
+            ${escapeHtml(option.label)}
+            ${subText}
+          </span>
+          <span class="arrow">${arrow}</span>
+        </button>
+      `;
+    })
+    .join("");
+
+  customSelectList.querySelectorAll(".custom-select-option").forEach((button) => {
+    button.addEventListener("click", () => {
+      const value = button.dataset.value;
+      if (activeCustomSelectHandler) activeCustomSelectHandler(value);
+      closeCustomSelect();
+    });
+  });
+
+  customSelectOverlay.hidden = false;
+  document.body.classList.add("menu-open");
+}
+
+function closeCustomSelect() {
+  if (customSelectOverlay) customSelectOverlay.hidden = true;
+  document.body.classList.remove("menu-open");
+  activeCustomSelectHandler = null;
+}
+
+function openAccountSelector() {
+  const options = accounts.map((account) => ({
+    value: account.id,
+    label: account.name,
+    subLabel: getAccountTypeLabel(account.type)
+  }));
+
+  options.push({
+    value: "__manage_accounts__",
+    label: "＋ 新增或管理帳戶",
+    subLabel: "可新增帳戶、改名稱、調整類型與初始金額"
+  });
+
+  openCustomSelect({
+    title: "選擇帳戶",
+    subtitle: "這筆收入或支出要記在哪個資金位置",
+    options,
+    selectedValue: getSelectedAccountId(),
+    onSelect: (value) => {
+      if (value === "__manage_accounts__") {
+        openAccountPanel(true);
+        return;
+      }
+
+      setSelectedAccount(value);
+    }
+  });
+}
+
+function openAccountTypeSelector() {
+  const orderedTypes = ["cash", "bank", "saving", "credit", "other"];
+  const options = orderedTypes.map((type) => ({
+    value: type,
+    label: getAccountTypeLabel(type),
+    subLabel: getAccountTypeDescription(type)
+  }));
+
+  openCustomSelect({
+    title: "選擇帳戶類型",
+    subtitle: "用來區分現金、銀行、存錢筒或信用卡",
+    options,
+    selectedValue: accountTypeSelect ? accountTypeSelect.value : "cash",
+    onSelect: (value) => {
+      if (!accountTypeSelect) return;
+      accountTypeSelect.value = value || "cash";
+      updateAccountTypeButtonText();
+    }
+  });
+}
+
+function openAccountPanel(shouldScroll = false) {
+  if (accountPanelBody) accountPanelBody.hidden = false;
+  if (accountPanelToggle) {
+    accountPanelToggle.setAttribute("aria-expanded", "true");
+    const icon = accountPanelToggle.querySelector("b");
+    if (icon) icon.textContent = "⌃";
+  }
+
+  if (shouldScroll && accountPanelToggle) {
+    setTimeout(() => {
+      accountPanelToggle.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+  }
+}
+
+function getAccountTypeDescription(type) {
+  const descriptions = {
+    cash: "例如現金錢包、零用金",
+    bank: "例如薪轉戶、活存帳戶",
+    saving: "例如存錢筒、旅遊基金",
+    credit: "例如信用卡、分期卡片",
+    other: "其他想自己分類的資金位置"
+  };
+
+  return descriptions[type] || descriptions.other;
+}
+
+function renderAccounts() {
+  if (!accountList) return;
+
+  if (!accounts.length) {
+    accountList.innerHTML = `<div class="empty">目前還沒有帳戶，先新增一個來使用</div>`;
+    return;
+  }
+
+  const accountStats = getAccountStats();
+
+  accountList.innerHTML = accounts
+    .map((account) => {
+      const stats = accountStats[account.id] || { income: 0, expense: 0, balance: Number(account.initialBalance || 0), usedCount: 0 };
+      const isCredit = account.type === "credit";
+      const balanceLabel = isCredit ? "待繳估算" : "目前估算";
+      const balanceClass = isCredit ? "expense" : (stats.balance >= 0 ? "income" : "expense");
+      const usedText = stats.usedCount > 0 ? `已使用 ${stats.usedCount} 筆` : "尚未使用";
+
+      return `
+        <article class="account-item">
+          <div class="account-main">
+            <div class="account-name-row">
+              <strong>${escapeHtml(account.name)}</strong>
+              <span>${getAccountTypeLabel(account.type)}</span>
+            </div>
+            <small>初始金額 ${money(account.initialBalance || 0)}｜${usedText}</small>
+          </div>
+          <div class="account-side">
+            <span>${balanceLabel}</span>
+            <b class="${balanceClass}">${money(stats.balance)}</b>
+            <div class="record-actions account-actions">
+              <button class="edit-btn" type="button" onclick="editAccount('${escapeForAttribute(account.id)}')">編輯</button>
+              <button class="delete-btn" type="button" onclick="deleteAccount('${escapeForAttribute(account.id)}')">刪除</button>
+            </div>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function getAccountStats() {
+  const stats = {};
+
+  accounts.forEach((account) => {
+    stats[account.id] = {
+      income: 0,
+      expense: 0,
+      usedCount: 0,
+      balance: Number(account.initialBalance || 0)
+    };
+  });
+
+  records.forEach((record) => {
+    const accountId = getRecordAccountId(record);
+    if (!stats[accountId]) return;
+
+    const amount = Number(record.amount || 0);
+    const account = accounts.find((item) => item.id === accountId);
+    stats[accountId].usedCount += 1;
+
+    if (record.type === "income") {
+      stats[accountId].income += amount;
+      stats[accountId].balance += account && account.type === "credit" ? -amount : amount;
+    } else {
+      stats[accountId].expense += amount;
+      stats[accountId].balance += account && account.type === "credit" ? amount : -amount;
+    }
+  });
+
+  return stats;
+}
+
+function saveAccountFromForm() {
+  if (!accountNameInput || !accountTypeSelect || !accountInitialInput) return;
+
+  const name = accountNameInput.value.trim();
+  const type = accountTypeSelect.value || "cash";
+  const initialBalance = Number(accountInitialInput.value || 0);
+
+  if (!name) {
+    customAlert("請輸入帳戶名稱");
+    return;
+  }
+
+  const duplicate = accounts.some((account) => account.name === name && account.id !== editingAccountId);
+  if (duplicate) {
+    customAlert("已經有同名帳戶，請換一個名稱");
+    return;
+  }
+
+  if (editingAccountId) {
+    const index = accounts.findIndex((account) => account.id === editingAccountId);
+    if (index === -1) {
+      customAlert("找不到要修改的帳戶，請重新選擇一次。", "修改失敗");
+      resetAccountForm();
+      return;
+    }
+
+    accounts[index] = {
+      ...accounts[index],
+      name,
+      type,
+      initialBalance,
+      updatedAt: new Date().toISOString()
+    };
+  } else {
+    accounts.push({
+      id: `account_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+      name,
+      type,
+      initialBalance,
+      createdAt: new Date().toISOString()
+    });
+  }
+
+  saveAccounts();
+  resetAccountForm();
+  render();
+}
+
+function editAccount(id) {
+  const account = accounts.find((item) => item.id === id);
+  if (!account) {
+    customAlert("找不到這個帳戶，可能已經被刪除了。", "無法編輯");
+    return;
+  }
+
+  openAccountPanel(true);
+
+  editingAccountId = id;
+  accountNameInput.value = account.name || "";
+  accountTypeSelect.value = account.type || "cash";
+  updateAccountTypeButtonText();
+  accountInitialInput.value = account.initialBalance || 0;
+  saveAccountBtn.textContent = "儲存帳戶修改";
+  if (cancelAccountEditBtn) cancelAccountEditBtn.hidden = false;
+  accountNameInput.focus();
+}
+
+async function deleteAccount(id) {
+  const account = accounts.find((item) => item.id === id);
+  if (!account) return;
+
+  const usedCount = records.filter((record) => getRecordAccountId(record) === id).length;
+  if (usedCount > 0) {
+    customAlert(`「${account.name}」已經有 ${usedCount} 筆紀錄使用中，為了避免資料錯亂，請先把那些紀錄改到其他帳戶後再刪除。`, "無法刪除帳戶");
+    return;
+  }
+
+  if (accounts.length <= 1) {
+    customAlert("至少要保留一個帳戶");
+    return;
+  }
+
+  const confirmed = await customConfirm(`確定要刪除帳戶「${account.name}」嗎？`, "刪除帳戶");
+  if (!confirmed) return;
+
+  accounts = accounts.filter((item) => item.id !== id);
+  saveAccounts();
+
+  if (editingAccountId === id) {
+    resetAccountForm();
+  }
+
+  render();
+}
+
+function resetAccountForm() {
+  editingAccountId = null;
+  if (accountNameInput) accountNameInput.value = "";
+  if (accountTypeSelect) accountTypeSelect.value = "cash";
+  updateAccountTypeButtonText();
+  if (accountInitialInput) accountInitialInput.value = "0";
+  if (saveAccountBtn) saveAccountBtn.textContent = "新增帳戶";
+  if (cancelAccountEditBtn) cancelAccountEditBtn.hidden = true;
+}
+
+function getAccountTypeLabel(type) {
+  return accountTypeLabels[type] || accountTypeLabels.other;
+}
+
+function loadAccounts() {
+  try {
+    const data = localStorage.getItem(ACCOUNT_STORAGE_KEY);
+    if (!data) return clone(defaultAccounts);
+    return normalizeAccounts(JSON.parse(data));
+  } catch (error) {
+    return clone(defaultAccounts);
+  }
+}
+
+function normalizeAccounts(source) {
+  const rawList = Array.isArray(source) ? source : [];
+  const usedIds = new Set();
+  const normalized = rawList
+    .map((account, index) => {
+      const name = String(account && account.name ? account.name : "").trim();
+      if (!name) return null;
+
+      let safeId = sanitizeAccountId(account.id || `account_${Date.now()}_${index}`);
+      while (usedIds.has(safeId)) {
+        safeId = `${safeId}_${index}`;
+      }
+      usedIds.add(safeId);
+
+      return {
+        id: safeId,
+        name,
+        type: accountTypeLabels[account.type] ? account.type : "cash",
+        initialBalance: Number(account.initialBalance || 0),
+        createdAt: account.createdAt || new Date().toISOString(),
+        updatedAt: account.updatedAt || ""
+      };
+    })
+    .filter(Boolean);
+
+  return normalized.length ? normalized : clone(defaultAccounts);
+}
+
+function sanitizeAccountId(id) {
+  const cleanId = String(id || "")
+    .trim()
+    .replace(/[^A-Za-z0-9_-]/g, "_");
+  return cleanId || `account_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+function mergeAccounts(current, importedAccounts) {
+  const merged = normalizeAccounts(current);
+  const existingIds = new Set(merged.map((account) => account.id));
+  const existingNames = new Set(merged.map((account) => account.name));
+
+  normalizeAccounts(importedAccounts).forEach((account) => {
+    if (existingIds.has(account.id) || existingNames.has(account.name)) return;
+    merged.push(account);
+  });
+
+  return merged;
+}
+
+function saveAccounts() {
+  localStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(accounts));
 }
 
 function loadRecords() {
@@ -1947,6 +2594,135 @@ function renderDebts() {
     .join("");
 }
 
+function renderCreditCardDetails() {
+  if (!creditCardDetailList) return;
+
+  const selectedMonth = creditDetailMonthFilter?.dataset?.month || getSelectedMonthValue();
+  const creditRecords = records
+    .filter((record) => {
+      return (
+        record.date &&
+        record.date.startsWith(selectedMonth) &&
+        isCreditCardExpenseRecord(record)
+      );
+    })
+    .sort((a, b) => {
+      if (a.date === b.date) {
+        return (b.createdAt || "").localeCompare(a.createdAt || "");
+      }
+      return b.date.localeCompare(a.date);
+    });
+
+  const total = creditRecords.reduce((sum, record) => sum + Number(record.amount || 0), 0);
+
+  if (creditDetailTotal) creditDetailTotal.textContent = money(total);
+  if (creditDetailCount) creditDetailCount.textContent = `${creditRecords.length} 筆`;
+
+  if (creditRecords.length === 0) {
+    creditCardDetailList.innerHTML = `
+      <div class="empty">
+        這個月份還沒有信用卡消費。<br>
+        記帳時把「帳戶」選成信用卡，就會自動整理到這裡。
+      </div>
+    `;
+    return;
+  }
+
+  const groups = [];
+  const groupMap = {};
+
+  creditRecords.forEach((record) => {
+    const group = getCreditCardGroup(record);
+
+    if (!groupMap[group.key]) {
+      groupMap[group.key] = {
+        ...group,
+        total: 0,
+        records: []
+      };
+      groups.push(groupMap[group.key]);
+    }
+
+    groupMap[group.key].total += Number(record.amount || 0);
+    groupMap[group.key].records.push(record);
+  });
+
+  creditCardDetailList.innerHTML = groups
+    .sort((a, b) => b.total - a.total)
+    .map((group) => {
+      const details = group.records
+        .map((record) => {
+          const note = record.note ? escapeHtml(record.note) : "無備註";
+          const categoryLabel = getCreditRecordCategoryLabel(record, group.name);
+
+          return `
+            <div class="credit-detail-row">
+              <div>
+                <strong>${formatDateLabel(record.date)}</strong>
+                <small>${escapeHtml(categoryLabel)}｜${note}</small>
+              </div>
+              <b>${money(record.amount || 0)}</b>
+            </div>
+          `;
+        })
+        .join("");
+
+      return `
+        <details class="credit-card-group" open>
+          <summary>
+            <span>
+              <strong>${escapeHtml(group.name)}</strong>
+              <small>${group.records.length} 筆消費｜${escapeHtml(group.typeLabel)}</small>
+            </span>
+            <b>${money(group.total)}</b>
+          </summary>
+          <div class="credit-card-records">
+            ${details}
+          </div>
+        </details>
+      `;
+    })
+    .join("");
+}
+
+function isCreditCardExpenseRecord(record) {
+  if (!record || record.type !== "expense") return false;
+
+  const account = getAccountForRecord(record);
+  if (account && account.type === "credit") return true;
+
+  return record.category === "信用卡支出";
+}
+
+function getCreditCardGroup(record) {
+  const account = getAccountForRecord(record);
+
+  if (account && account.type === "credit") {
+    return {
+      key: account.id,
+      name: account.name,
+      typeLabel: getAccountTypeLabel(account.type)
+    };
+  }
+
+  const legacyName = record.subCategory || record.accountName || "信用卡支出";
+
+  return {
+    key: `legacy_credit_${sanitizeAccountId(legacyName)}`,
+    name: legacyName,
+    typeLabel: "信用卡支出"
+  };
+}
+
+function getCreditRecordCategoryLabel(record, groupName) {
+  const category = record.category || "其他";
+  const subCategory = record.subCategory || "";
+
+  if (!subCategory || subCategory === groupName) return category;
+  return `${category}／${subCategory}`;
+}
+
+
 function renderDebtItem(debt) {
   const detail = getDebtDetail(debt);
   const safeProgress = clampNumber(Number(detail.progress || 0), 0, 100);
@@ -2208,7 +2984,7 @@ function getDebtDetail(debt) {
         { label: "循環年利率", value: `${annualRate}%` },
         { label: "連動卡名", value: debt.linkedSubCategory || "信用卡支出" }
       ],
-      note: "循環利息只依當期帳單計算；信用卡支出只會連動到卡循估算，不會重複加進利息。"
+      note: "本期利息由含息帳單反推估算，只顯示不重複加進當期；信用卡支出只連動到卡循估算。"
     };
   }
 
@@ -2338,19 +3114,22 @@ function calculateCreditRevolving({ statementAmount, payment, annualRate, intere
   const paid = Number(payment || 0);
   const rate = Number(annualRate || 0) / 100;
   const days = Number(interestDays || 0);
+  const interestFactor = Math.max(rate, 0) / 365 * Math.max(days, 0);
+
+  // 當期帳單金額視為「已經含本期循環利息」的金額。
+  // 因此這裡用含息總額反推本期利息：利息 = 含息帳單 - 含息帳單 / (1 + 日利率 * 計息天數)。
+  // 利息只負責顯示，不會再加進當期剩餘，避免重複計入。
+  const currentInterestRaw = interestFactor > 0
+    ? statement - (statement / (1 + interestFactor))
+    : 0;
 
   const currentRemainingRaw = Math.max(statement - paid, 0);
-
-  // 循環利息只跟「當期帳單金額」有關。
-  // 信用卡支出連動只會影響卡循估算，不會讓循環利息變多。
-  const revolvingInterestRaw = statement * rate / 365 * days;
-
   const linkedAmountRaw = Number(linkedCreditExpense || 0);
   const carryForwardRaw = currentRemainingRaw + linkedAmountRaw;
 
   return {
     currentRemaining: Math.round(currentRemainingRaw),
-    currentInterest: Math.round(revolvingInterestRaw),
+    currentInterest: Math.round(currentInterestRaw),
     linkedCreditExpense: Math.round(linkedAmountRaw),
     carryForward: Math.round(Math.max(carryForwardRaw, 0)),
     nextStatement: Math.round(Math.max(carryForwardRaw, 0))
@@ -2576,6 +3355,7 @@ function switchTab(tabName) {
 
   if (tabName === "loan") {
     renderDebts();
+    renderCreditCardDetails();
   }
 
   if (tabName === "stats") {
@@ -2590,6 +3370,9 @@ document.addEventListener("keydown", (event) => {
     }
     if (datePickerOverlay && !datePickerOverlay.hidden) {
       closeDatePicker();
+    }
+    if (customSelectOverlay && !customSelectOverlay.hidden) {
+      closeCustomSelect();
     }
   }
 });
