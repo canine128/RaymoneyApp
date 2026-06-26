@@ -2574,7 +2574,7 @@ input[type="month"] {
 
 .credit-detail-head {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   align-items: start;
   margin-bottom: 12px;
@@ -2593,7 +2593,16 @@ input[type="month"] {
 }
 
 .credit-detail-month {
-  min-width: 128px;
+  width: 100%;
+}
+
+.credit-detail-head > div,
+.credit-detail-head > label {
+  min-width: 0;
+}
+
+.credit-detail-head .month-pill {
+  justify-self: stretch;
 }
 
 .credit-detail-summary {
@@ -2723,15 +2732,7 @@ input[type="month"] {
   white-space: nowrap;
 }
 
-@media (max-width: 420px) {
-  .credit-detail-head {
-    grid-template-columns: 1fr;
-  }
-
-  .credit-detail-month {
-    width: 100%;
-  }
-
+@media (max-width: 560px) {
   .credit-detail-summary {
     grid-template-columns: 1fr;
   }
@@ -2744,4 +2745,85 @@ input[type="month"] {
 .credit-card-group summary::after {
   grid-column: auto;
   text-align: right;
+}
+
+/* Account grouped management */
+.account-type-group {
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+  border-radius: 20px;
+  background: rgba(255, 248, 239, 0.66);
+  border: 1px solid rgba(199, 155, 85, 0.14);
+}
+
+.account-group-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.account-group-head strong {
+  display: block;
+  color: var(--text);
+  font-size: 16px;
+  margin-bottom: 3px;
+}
+
+.account-group-head small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.account-group-head button {
+  border: none;
+  border-radius: 999px;
+  padding: 9px 12px;
+  color: white;
+  background: linear-gradient(135deg, #d1a765, #a97838);
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(157, 115, 55, 0.18);
+}
+
+.account-group-list {
+  display: grid;
+  gap: 8px;
+}
+
+.account-group-empty {
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255, 252, 246, 0.72);
+}
+
+.custom-select-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 6px 2px;
+  color: var(--gold-dark);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.5px;
+}
+
+.custom-select-group-header small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+@media (max-width: 390px) {
+  .account-group-head {
+    grid-template-columns: 1fr;
+  }
+
+  .account-group-head button {
+    justify-self: start;
+  }
 }

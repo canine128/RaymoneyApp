@@ -31,17 +31,17 @@ const defaultFolderCategories = {
 const defaultAccounts = [
   { id: "cash_wallet", name: "現金錢包", type: "cash", initialBalance: 0, createdAt: "default" },
   { id: "bank_account", name: "銀行帳戶", type: "bank", initialBalance: 0, createdAt: "default" },
-  { id: "saving_jar", name: "存錢筒", type: "saving", initialBalance: 0, createdAt: "default" },
-  { id: "credit_card", name: "信用卡", type: "credit", initialBalance: 0, createdAt: "default" }
+  { id: "saving_jar", name: "存錢筒", type: "saving", initialBalance: 0, createdAt: "default" }
 ];
 
 const accountTypeLabels = {
   cash: "現金",
   bank: "銀行",
   saving: "存錢",
-  credit: "信用卡",
   other: "其他"
 };
+
+const accountTypeOrder = ["cash", "bank", "saving", "other"];
 
 const chartColors = [
   "#c79b55",
@@ -1449,7 +1449,7 @@ function renderList(monthRecords) {
         : "";
       const account = getAccountForRecord(record);
       const accountMeta = account
-        ? `<span class="record-account">${escapeHtml(account.name)}</span>`
+        ? `<span class="record-account">${escapeHtml(getAccountDisplayLabel(account))}</span>`
         : `<span class="record-account muted">未指定帳戶</span>`;
 
       return `
@@ -1562,7 +1562,7 @@ function clearCurrentMonth() {
 function exportBackup() {
   const data = {
     app: "Ray Money Book",
-    version: 9,
+    version: 11,
     exportAt: new Date().toISOString(),
     records,
     accounts,
@@ -1743,12 +1743,25 @@ function updateAccountSelectButtonText() {
     return;
   }
 
-  accountSelectButtonText.textContent = `${account.name}｜${getAccountTypeLabel(account.type)}`;
+  accountSelectButtonText.textContent = getAccountDisplayLabel(account);
 }
 
 function updateAccountTypeButtonText() {
   if (!accountTypeButtonText || !accountTypeSelect) return;
   accountTypeButtonText.textContent = getAccountTypeLabel(accountTypeSelect.value || "cash");
+}
+
+function getSafeAccountType(type) {
+  return accountTypeLabels[type] ? type : "cash";
+}
+
+function getAccountDisplayLabel(account) {
+  if (!account) return "選擇帳戶";
+  return `${getAccountTypeLabel(account.type)}｜${account.name}`;
+}
+
+function getAccountsByType(type) {
+  return accounts.filter((account) => getSafeAccountType(account.type) === type);
 }
 
 function openCustomSelect({ title, subtitle, options, selectedValue, onSelect }) {
@@ -1760,6 +1773,16 @@ function openCustomSelect({ title, subtitle, options, selectedValue, onSelect })
 
   customSelectList.innerHTML = options
     .map((option) => {
+      if (option.kind === "header") {
+        const countText = typeof option.count === "number" ? `<small>${option.count} 個</small>` : "";
+        return `
+          <div class="custom-select-group-header">
+            <span>${escapeHtml(option.label)}</span>
+            ${countText}
+          </div>
+        `;
+      }
+
       const activeClass = option.value === selectedValue ? "active" : "";
       const subText = option.subLabel ? `<small>${escapeHtml(option.subLabel)}</small>` : "";
       const arrow = option.value === selectedValue ? "✓" : "›";
@@ -1795,21 +1818,36 @@ function closeCustomSelect() {
 }
 
 function openAccountSelector() {
-  const options = accounts.map((account) => ({
-    value: account.id,
-    label: account.name,
-    subLabel: getAccountTypeLabel(account.type)
-  }));
+  const options = [];
+
+  accountTypeOrder.forEach((type) => {
+    const groupAccounts = accounts.filter((account) => getSafeAccountType(account.type) === type);
+    if (!groupAccounts.length) return;
+
+    options.push({
+      kind: "header",
+      label: getAccountTypeLabel(type),
+      count: groupAccounts.length
+    });
+
+    groupAccounts.forEach((account) => {
+      options.push({
+        value: account.id,
+        label: account.name,
+        subLabel: getAccountTypeDescription(account.type)
+      });
+    });
+  });
 
   options.push({
     value: "__manage_accounts__",
     label: "＋ 新增或管理帳戶",
-    subLabel: "可新增帳戶、改名稱、調整類型與初始金額"
+    subLabel: "可在現金、銀行、存錢、其他底下新增帳戶名稱"
   });
 
   openCustomSelect({
     title: "選擇帳戶",
-    subtitle: "這筆收入或支出要記在哪個資金位置",
+    subtitle: "依帳戶類型分組，選擇這筆錢要記在哪裡",
     options,
     selectedValue: getSelectedAccountId(),
     onSelect: (value) => {
@@ -1824,8 +1862,7 @@ function openAccountSelector() {
 }
 
 function openAccountTypeSelector() {
-  const orderedTypes = ["cash", "bank", "saving", "credit", "other"];
-  const options = orderedTypes.map((type) => ({
+  const options = accountTypeOrder.map((type) => ({
     value: type,
     label: getAccountTypeLabel(type),
     subLabel: getAccountTypeDescription(type)
@@ -1833,13 +1870,16 @@ function openAccountTypeSelector() {
 
   openCustomSelect({
     title: "選擇帳戶類型",
-    subtitle: "用來區分現金、銀行、存錢筒或信用卡",
+    subtitle: "用來區分現金、銀行、存錢筒或其他資金位置",
     options,
     selectedValue: accountTypeSelect ? accountTypeSelect.value : "cash",
     onSelect: (value) => {
       if (!accountTypeSelect) return;
-      accountTypeSelect.value = value || "cash";
+      accountTypeSelect.value = getSafeAccountType(value || "cash");
       updateAccountTypeButtonText();
+      if (accountNameInput && !editingAccountId) {
+        accountNameInput.placeholder = getAccountNamePlaceholder(accountTypeSelect.value);
+      }
     }
   });
 }
@@ -1864,7 +1904,6 @@ function getAccountTypeDescription(type) {
     cash: "例如現金錢包、零用金",
     bank: "例如薪轉戶、活存帳戶",
     saving: "例如存錢筒、旅遊基金",
-    credit: "例如信用卡、分期卡片",
     other: "其他想自己分類的資金位置"
   };
 
@@ -1874,39 +1913,55 @@ function getAccountTypeDescription(type) {
 function renderAccounts() {
   if (!accountList) return;
 
-  if (!accounts.length) {
-    accountList.innerHTML = `<div class="empty">目前還沒有帳戶，先新增一個來使用</div>`;
-    return;
-  }
-
   const accountStats = getAccountStats();
 
-  accountList.innerHTML = accounts
-    .map((account) => {
-      const stats = accountStats[account.id] || { income: 0, expense: 0, balance: Number(account.initialBalance || 0), usedCount: 0 };
-      const isCredit = account.type === "credit";
-      const balanceLabel = isCredit ? "待繳估算" : "目前估算";
-      const balanceClass = isCredit ? "expense" : (stats.balance >= 0 ? "income" : "expense");
-      const usedText = stats.usedCount > 0 ? `已使用 ${stats.usedCount} 筆` : "尚未使用";
+  accountList.innerHTML = accountTypeOrder
+    .map((type) => {
+      const groupAccounts = getAccountsByType(type);
+      const accountItems = groupAccounts.length
+        ? groupAccounts
+            .map((account) => {
+              const stats = accountStats[account.id] || { income: 0, expense: 0, balance: Number(account.initialBalance || 0), usedCount: 0 };
+              const balanceLabel = "目前估算";
+              const balanceClass = stats.balance >= 0 ? "income" : "expense";
+              const usedText = stats.usedCount > 0 ? `已使用 ${stats.usedCount} 筆` : "尚未使用";
+
+              return `
+                <article class="account-item">
+                  <div class="account-main">
+                    <div class="account-name-row">
+                      <strong>${escapeHtml(account.name)}</strong>
+                      <span>${getAccountTypeLabel(account.type)}</span>
+                    </div>
+                    <small>初始金額 ${money(account.initialBalance || 0)}｜${usedText}</small>
+                  </div>
+                  <div class="account-side">
+                    <span>${balanceLabel}</span>
+                    <b class="${balanceClass}">${money(stats.balance)}</b>
+                    <div class="record-actions account-actions">
+                      <button class="edit-btn" type="button" onclick="editAccount('${escapeForAttribute(account.id)}')">編輯</button>
+                      <button class="delete-btn" type="button" onclick="deleteAccount('${escapeForAttribute(account.id)}')">刪除</button>
+                    </div>
+                  </div>
+                </article>
+              `;
+            })
+            .join("")
+        : `<div class="empty account-group-empty">目前還沒有${getAccountTypeLabel(type)}帳戶</div>`;
 
       return `
-        <article class="account-item">
-          <div class="account-main">
-            <div class="account-name-row">
-              <strong>${escapeHtml(account.name)}</strong>
-              <span>${getAccountTypeLabel(account.type)}</span>
+        <section class="account-type-group">
+          <div class="account-group-head">
+            <div>
+              <strong>${getAccountTypeLabel(type)}</strong>
+              <small>${getAccountTypeDescription(type)}</small>
             </div>
-            <small>初始金額 ${money(account.initialBalance || 0)}｜${usedText}</small>
+            <button type="button" onclick="prepareNewAccount('${type}')">＋新增</button>
           </div>
-          <div class="account-side">
-            <span>${balanceLabel}</span>
-            <b class="${balanceClass}">${money(stats.balance)}</b>
-            <div class="record-actions account-actions">
-              <button class="edit-btn" type="button" onclick="editAccount('${escapeForAttribute(account.id)}')">編輯</button>
-              <button class="delete-btn" type="button" onclick="deleteAccount('${escapeForAttribute(account.id)}')">刪除</button>
-            </div>
+          <div class="account-group-list">
+            ${accountItems}
           </div>
-        </article>
+        </section>
       `;
     })
     .join("");
@@ -1934,21 +1989,43 @@ function getAccountStats() {
 
     if (record.type === "income") {
       stats[accountId].income += amount;
-      stats[accountId].balance += account && account.type === "credit" ? -amount : amount;
+      stats[accountId].balance += amount;
     } else {
       stats[accountId].expense += amount;
-      stats[accountId].balance += account && account.type === "credit" ? amount : -amount;
+      stats[accountId].balance -= amount;
     }
   });
 
   return stats;
 }
 
+function prepareNewAccount(type = "cash") {
+  openAccountPanel(true);
+  resetAccountForm();
+  if (accountTypeSelect) accountTypeSelect.value = getSafeAccountType(type);
+  updateAccountTypeButtonText();
+  if (accountNameInput) {
+    accountNameInput.focus();
+    accountNameInput.placeholder = getAccountNamePlaceholder(type);
+  }
+}
+
+function getAccountNamePlaceholder(type) {
+  const placeholders = {
+    cash: "例如：現金錢包、零用金",
+    bank: "例如：玉山銀行、凱基銀行、郵局",
+    saving: "例如：存錢筒、旅遊基金、緊急預備金",
+    other: "例如：Line Pay、街口支付、悠遊卡"
+  };
+
+  return placeholders[getSafeAccountType(type)] || placeholders.other;
+}
+
 function saveAccountFromForm() {
   if (!accountNameInput || !accountTypeSelect || !accountInitialInput) return;
 
   const name = accountNameInput.value.trim();
-  const type = accountTypeSelect.value || "cash";
+  const type = getSafeAccountType(accountTypeSelect.value || "cash");
   const initialBalance = Number(accountInitialInput.value || 0);
 
   if (!name) {
@@ -2003,8 +2080,9 @@ function editAccount(id) {
 
   editingAccountId = id;
   accountNameInput.value = account.name || "";
-  accountTypeSelect.value = account.type || "cash";
+  accountTypeSelect.value = getSafeAccountType(account.type || "cash");
   updateAccountTypeButtonText();
+  if (accountNameInput) accountNameInput.placeholder = getAccountNamePlaceholder(accountTypeSelect.value);
   accountInitialInput.value = account.initialBalance || 0;
   saveAccountBtn.textContent = "儲存帳戶修改";
   if (cancelAccountEditBtn) cancelAccountEditBtn.hidden = false;
@@ -2041,7 +2119,10 @@ async function deleteAccount(id) {
 
 function resetAccountForm() {
   editingAccountId = null;
-  if (accountNameInput) accountNameInput.value = "";
+  if (accountNameInput) {
+    accountNameInput.value = "";
+    accountNameInput.placeholder = getAccountNamePlaceholder("cash");
+  }
   if (accountTypeSelect) accountTypeSelect.value = "cash";
   updateAccountTypeButtonText();
   if (accountInitialInput) accountInitialInput.value = "0";
@@ -2050,7 +2131,7 @@ function resetAccountForm() {
 }
 
 function getAccountTypeLabel(type) {
-  return accountTypeLabels[type] || accountTypeLabels.other;
+  return accountTypeLabels[getSafeAccountType(type)] || accountTypeLabels.other;
 }
 
 function loadAccounts() {
@@ -2077,10 +2158,12 @@ function normalizeAccounts(source) {
       }
       usedIds.add(safeId);
 
+      const rawType = account && account.type === "credit" ? "other" : getSafeAccountType(account.type);
+
       return {
         id: safeId,
         name,
-        type: accountTypeLabels[account.type] ? account.type : "cash",
+        type: rawType,
         initialBalance: Number(account.initialBalance || 0),
         createdAt: account.createdAt || new Date().toISOString(),
         updatedAt: account.updatedAt || ""
@@ -2088,7 +2171,14 @@ function normalizeAccounts(source) {
     })
     .filter(Boolean);
 
-  return normalized.length ? normalized : clone(defaultAccounts);
+  const recordList = Array.isArray(records) ? records : [];
+  const cleaned = normalized.filter((account) => {
+    const isOldDefaultCredit = account.id === "credit_card" && account.createdAt === "default";
+    const isUsed = recordList.some((record) => record.accountId === account.id || record.accountName === account.name);
+    return !(isOldDefaultCredit && !isUsed);
+  });
+
+  return cleaned.length ? cleaned : clone(defaultAccounts);
 }
 
 function sanitizeAccountId(id) {
@@ -2622,7 +2712,7 @@ function renderCreditCardDetails() {
     creditCardDetailList.innerHTML = `
       <div class="empty">
         這個月份還沒有信用卡消費。<br>
-        記帳時把「帳戶」選成信用卡，就會自動整理到這裡。
+        記帳時把「分類」選成信用卡支出，或使用包含「信用卡」的分類，就會自動整理到這裡。
       </div>
     `;
     return;
@@ -2687,30 +2777,20 @@ function renderCreditCardDetails() {
 
 function isCreditCardExpenseRecord(record) {
   if (!record || record.type !== "expense") return false;
-
-  const account = getAccountForRecord(record);
-  if (account && account.type === "credit") return true;
-
-  return record.category === "信用卡支出";
+  const categoryName = String(record.category || "").trim();
+  return categoryName === "信用卡支出" || categoryName.includes("信用卡");
 }
 
 function getCreditCardGroup(record) {
-  const account = getAccountForRecord(record);
-
-  if (account && account.type === "credit") {
-    return {
-      key: account.id,
-      name: account.name,
-      typeLabel: getAccountTypeLabel(account.type)
-    };
-  }
-
-  const legacyName = record.subCategory || record.accountName || "信用卡支出";
+  const categoryName = String(record.category || "信用卡支出").trim();
+  const cardName = categoryName === "信用卡支出"
+    ? (record.subCategory || "未指定卡別")
+    : (record.subCategory || categoryName);
 
   return {
-    key: `legacy_credit_${sanitizeAccountId(legacyName)}`,
-    name: legacyName,
-    typeLabel: "信用卡支出"
+    key: `credit_category_${sanitizeAccountId(cardName)}`,
+    name: cardName,
+    typeLabel: "信用卡分類"
   };
 }
 

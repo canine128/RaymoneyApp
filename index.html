@@ -74,7 +74,7 @@
         <div class="credit-detail-head">
           <div>
             <h3>信用卡消費明細</h3>
-            <p>自動整理帳戶類型為信用卡的支出，依每張卡查看日期、金額與備註。</p>
+            <p>自動整理「信用卡支出」或含信用卡字樣的分類，依卡別查看日期、金額與備註。</p>
           </div>
           <label class="month-pill credit-detail-month">
             <span>查看月份</span>
@@ -88,7 +88,7 @@
             <strong id="creditDetailTotal">$0</strong>
           </div>
           <div>
-            <span>信用卡筆數</span>
+            <span>消費筆數</span>
             <strong id="creditDetailCount">0 筆</strong>
           </div>
         </div>
@@ -142,7 +142,7 @@
           <span>帳戶</span>
           <input type="hidden" id="accountSelect" value="cash_wallet" />
           <button type="button" id="accountSelectButton" class="custom-select-trigger">
-            <span id="accountSelectButtonText">現金錢包｜現金</span>
+            <span id="accountSelectButtonText">現金｜現金錢包</span>
             <b>⌄</b>
           </button>
           <small class="field-hint">這筆錢是從哪裡來，或要記在哪個位置。</small>
@@ -328,7 +328,7 @@
       <button type="button" id="accountPanelToggle" class="account-panel-toggle" aria-expanded="false">
         <span>
           <strong>帳戶管理</strong>
-          <small>新增、編輯現金錢包、存錢筒、信用卡等資金位置</small>
+          <small>依現金、銀行、存錢、其他分組管理帳戶名稱</small>
         </span>
         <b>⌄</b>
       </button>
@@ -337,7 +337,7 @@
         <div class="account-form">
           <label class="field">
             <span>帳戶名稱</span>
-            <input type="text" id="accountNameInput" placeholder="例如：現金錢包、存錢筒、玉山信用卡" />
+            <input type="text" id="accountNameInput" placeholder="例如：玉山銀行、凱基銀行、旅遊基金" />
           </label>
 
           <label class="field">
@@ -352,7 +352,7 @@
           <label class="field">
             <span>初始金額</span>
             <input type="number" id="accountInitialInput" value="0" step="1" />
-            <small class="field-hint">現金、銀行、存錢可填目前餘額；信用卡可填目前待繳金額。</small>
+            <small class="field-hint">可填這個帳戶目前的金額，之後收支會一起估算目前餘額。</small>
           </label>
 
           <div class="account-form-actions">
