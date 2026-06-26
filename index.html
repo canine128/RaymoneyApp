@@ -74,7 +74,7 @@
         <div class="credit-detail-head">
           <div>
             <h3>信用卡消費明細</h3>
-            <p>自動整理「信用卡支出」或含信用卡字樣的分類，依卡別查看日期、金額與備註。</p>
+            <p>自動從本月紀錄抓取「信用卡」分類，並依小分類整理成各家卡片明細。</p>
           </div>
           <label class="month-pill credit-detail-month">
             <span>查看月份</span>
@@ -138,25 +138,32 @@
           </button>
         </div>
 
-        <label class="field">
+        <div class="field account-field" id="recordAccountField">
           <span>帳戶</span>
           <input type="hidden" id="accountSelect" value="cash_wallet" />
           <button type="button" id="accountSelectButton" class="custom-select-trigger">
             <span id="accountSelectButtonText">現金｜現金錢包</span>
             <b>⌄</b>
           </button>
-          <small class="field-hint">這筆錢是從哪裡來，或要記在哪個位置。</small>
-        </label>
+          <small class="field-hint" id="accountFieldHint">這筆錢是從哪裡來，或要記在哪個位置。</small>
+        </div>
 
-        <label class="field">
-          <span>日期</span>
-          <input type="text" id="date" class="date-picker-input" placeholder="選擇日期" readonly required />
-        </label>
+        <details class="record-more-options" id="recordMoreOptions">
+          <summary>
+            <span>＋ 備註與日期</span>
+            <small>日期預設今天，備註可選填</small>
+          </summary>
 
-        <label class="field">
-          <span>備註</span>
-          <input type="text" id="note" placeholder="例如：晚餐、油錢、薪水" />
-        </label>
+          <label class="field">
+            <span>日期</span>
+            <input type="text" id="date" class="date-picker-input" placeholder="選擇日期" readonly required />
+          </label>
+
+          <label class="field">
+            <span>備註</span>
+            <input type="text" id="note" placeholder="例如：晚餐、油錢、薪水" />
+          </label>
+        </details>
 
         <button class="primary-btn" type="submit">新增記錄</button>
       </form>
@@ -334,7 +341,11 @@
       </button>
 
       <div id="accountPanelBody" class="account-panel-body" hidden>
-        <div class="account-form">
+        <button type="button" id="openAccountFormBtn" class="account-add-main-btn">
+          ＋ 新增帳戶
+        </button>
+
+        <div class="account-form" id="accountForm" hidden>
           <label class="field">
             <span>帳戶名稱</span>
             <input type="text" id="accountNameInput" placeholder="例如：玉山銀行、凱基銀行、旅遊基金" />

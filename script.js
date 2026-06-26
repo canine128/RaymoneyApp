@@ -13,6 +13,7 @@ const defaultFolderCategories = {
     "購物": [],
     "娛樂": [],
     "貸款": ["車貸", "信貸"],
+    "信用卡": ["中國信託", "凱基", "玉山"],
     "信用卡支出": [],
     "寵物": ["飼料", "醫療", "用品"],
     "醫療": [],
@@ -137,6 +138,11 @@ const clearMonthBtn = document.getElementById("clearMonthBtn");
 const accountPanelToggle = document.getElementById("accountPanelToggle");
 const accountPanelBody = document.getElementById("accountPanelBody");
 const accountList = document.getElementById("accountList");
+const openAccountFormBtn = document.getElementById("openAccountFormBtn");
+const accountForm = document.getElementById("accountForm");
+const recordAccountField = document.getElementById("recordAccountField");
+const accountFieldHint = document.getElementById("accountFieldHint");
+const recordMoreOptions = document.getElementById("recordMoreOptions");
 const accountNameInput = document.getElementById("accountNameInput");
 const accountTypeSelect = document.getElementById("accountTypeSelect");
 const accountTypeButton = document.getElementById("accountTypeButton");
@@ -482,6 +488,7 @@ function init() {
   document.querySelectorAll("input[name='type']").forEach((radio) => {
     radio.addEventListener("change", () => {
       clearSelectedCategory();
+      updateRecordAccountFieldState();
     });
   });
 
@@ -625,6 +632,7 @@ function init() {
   }
 
   updateDebtTypeFields();
+  updateRecordAccountFieldState();
 
 
   tabButtons.forEach((button) => {
@@ -645,7 +653,8 @@ function addRecord(event) {
   const type = getSelectedType();
   const category = categoryInput.value;
   const subCategory = subCategoryInput.value;
-  const accountId = getSelectedAccountId();
+  const isCreditCardExpense = isCreditCardExpenseValues(type, category, subCategory);
+  const accountId = isCreditCardExpense ? "" : getSelectedAccountId();
   const date = getDateInputValue();
   const note = noteInput.value.trim();
 
@@ -659,7 +668,7 @@ function addRecord(event) {
     return;
   }
 
-  if (!accountId) {
+  if (!isCreditCardExpense && !accountId) {
     customAlert("請選擇帳戶");
     return;
   }
@@ -759,6 +768,8 @@ function resetRecordFormAfterSubmit() {
   noteInput.value = "";
   setDateInputValue(formatDate(new Date()));
   setSelectedAccount(getDefaultAccountId());
+  if (recordMoreOptions) recordMoreOptions.open = false;
+  updateRecordAccountFieldState();
 }
 
 function resetRecordEditMode() {
@@ -771,6 +782,7 @@ function resetRecordEditMode() {
 function setSelectedType(type) {
   const radio = document.querySelector(`input[name='type'][value='${type}']`);
   if (radio) radio.checked = true;
+  updateRecordAccountFieldState();
 }
 
 function editRecord(id) {
@@ -790,6 +802,8 @@ function editRecord(id) {
   setDateInputValue(record.date || formatDate(new Date()));
   noteInput.value = record.note || "";
   updateCategoryButtonText();
+  updateRecordAccountFieldState();
+  if (recordMoreOptions) recordMoreOptions.open = Boolean(record.note) || Boolean(record.date);
 
   if (recordSubmitBtn) recordSubmitBtn.textContent = "儲存修改";
   if (recordFormTitle) recordFormTitle.textContent = "修改紀錄";
@@ -1095,6 +1109,7 @@ function selectFinalCategory(category, subCategory) {
   categoryInput.value = category;
   subCategoryInput.value = subCategory;
   updateCategoryButtonText();
+  updateRecordAccountFieldState();
   closeMenu();
 }
 
@@ -1141,10 +1156,53 @@ function updateCategoryButtonText() {
   categoryButtonText.textContent = subCategory ? `${category} - ${subCategory}` : category;
 }
 
+
+function isCreditCardExpenseValues(type, category, subCategory = "") {
+  if (type !== "expense") return false;
+
+  const categoryName = normalizeText(category);
+  const subCategoryName = normalizeText(subCategory);
+
+  return (
+    categoryName === "信用卡" ||
+    categoryName === "信用卡支出" ||
+    categoryName.includes("信用卡") ||
+    subCategoryName.includes("信用卡")
+  );
+}
+
+function isCurrentRecordCreditCardExpense() {
+  return isCreditCardExpenseValues(getSelectedType(), categoryInput?.value, subCategoryInput?.value);
+}
+
+function updateRecordAccountFieldState() {
+  if (!recordAccountField) return;
+
+  const isCreditCardExpense = isCurrentRecordCreditCardExpense();
+
+  recordAccountField.hidden = isCreditCardExpense;
+
+  if (accountFieldHint) {
+    accountFieldHint.textContent = isCreditCardExpense
+      ? "信用卡消費不會扣現金或銀行帳戶，會整理到信用卡消費明細。"
+      : "這筆錢是從哪裡來，或要記在哪個位置。";
+  }
+
+  if (isCreditCardExpense && accountSelect) {
+    accountSelect.value = "";
+    return;
+  }
+
+  if (!isCreditCardExpense && accountSelect && !accountSelect.value) {
+    setSelectedAccount(getDefaultAccountId());
+  }
+}
+
 function clearSelectedCategory() {
   categoryInput.value = "";
   subCategoryInput.value = "";
   updateCategoryButtonText();
+  updateRecordAccountFieldState();
 }
 
 function render() {
@@ -1447,10 +1505,13 @@ function renderList(monthRecords) {
       const subCategory = record.subCategory
         ? `<span class="record-subcategory">／${escapeHtml(record.subCategory)}</span>`
         : "";
+      const isCreditCardExpense = isCreditCardExpenseRecord(record);
       const account = getAccountForRecord(record);
-      const accountMeta = account
-        ? `<span class="record-account">${escapeHtml(getAccountDisplayLabel(account))}</span>`
-        : `<span class="record-account muted">未指定帳戶</span>`;
+      const accountMeta = isCreditCardExpense
+        ? `<span class="record-account credit-meta">信用卡消費｜不扣帳戶</span>`
+        : account
+          ? `<span class="record-account">${escapeHtml(getAccountDisplayLabel(account))}</span>`
+          : `<span class="record-account muted">未指定帳戶</span>`;
 
       return `
         <article class="record-item">
@@ -1562,7 +1623,7 @@ function clearCurrentMonth() {
 function exportBackup() {
   const data = {
     app: "Ray Money Book",
-    version: 11,
+    version: 12,
     exportAt: new Date().toISOString(),
     records,
     accounts,
@@ -1678,7 +1739,12 @@ function setupAccountControls() {
       accountPanelBody.hidden = !willOpen;
       accountPanelToggle.setAttribute("aria-expanded", String(willOpen));
       accountPanelToggle.querySelector("b").textContent = willOpen ? "⌃" : "⌄";
+      if (!willOpen) resetAccountForm();
     });
+  }
+
+  if (openAccountFormBtn) {
+    openAccountFormBtn.addEventListener("click", () => prepareNewAccount("cash"));
   }
 
   if (saveAccountBtn) {
@@ -1711,6 +1777,10 @@ function getDefaultAccountId() {
 }
 
 function getRecordAccountId(record) {
+  if (isCreditCardExpenseRecord(record)) {
+    return "";
+  }
+
   if (record && record.accountId && accounts.some((account) => account.id === record.accountId)) {
     return record.accountId;
   }
@@ -1725,6 +1795,7 @@ function getRecordAccountId(record) {
 
 function getAccountForRecord(record) {
   const accountId = getRecordAccountId(record);
+  if (!accountId) return null;
   return accounts.find((account) => account.id === accountId) || null;
 }
 
@@ -1918,6 +1989,10 @@ function renderAccounts() {
   accountList.innerHTML = accountTypeOrder
     .map((type) => {
       const groupAccounts = getAccountsByType(type);
+      const totalBalance = groupAccounts.reduce((sum, account) => {
+        const stats = accountStats[account.id] || { balance: Number(account.initialBalance || 0) };
+        return sum + Number(stats.balance || 0);
+      }, 0);
       const accountItems = groupAccounts.length
         ? groupAccounts
             .map((account) => {
@@ -1950,18 +2025,18 @@ function renderAccounts() {
         : `<div class="empty account-group-empty">目前還沒有${getAccountTypeLabel(type)}帳戶</div>`;
 
       return `
-        <section class="account-type-group">
-          <div class="account-group-head">
+        <details class="account-type-group">
+          <summary class="account-group-head">
             <div>
               <strong>${getAccountTypeLabel(type)}</strong>
-              <small>${getAccountTypeDescription(type)}</small>
+              <small>${groupAccounts.length} 個帳戶｜${getAccountTypeDescription(type)}</small>
             </div>
-            <button type="button" onclick="prepareNewAccount('${type}')">＋新增</button>
-          </div>
+            <span class="account-group-total">${money(totalBalance)}</span>
+          </summary>
           <div class="account-group-list">
             ${accountItems}
           </div>
-        </section>
+        </details>
       `;
     })
     .join("");
@@ -1980,6 +2055,8 @@ function getAccountStats() {
   });
 
   records.forEach((record) => {
+    if (isCreditCardExpenseRecord(record)) return;
+
     const accountId = getRecordAccountId(record);
     if (!stats[accountId]) return;
 
@@ -2001,7 +2078,8 @@ function getAccountStats() {
 
 function prepareNewAccount(type = "cash") {
   openAccountPanel(true);
-  resetAccountForm();
+  resetAccountForm(false);
+  showAccountForm();
   if (accountTypeSelect) accountTypeSelect.value = getSafeAccountType(type);
   updateAccountTypeButtonText();
   if (accountNameInput) {
@@ -2065,7 +2143,7 @@ function saveAccountFromForm() {
   }
 
   saveAccounts();
-  resetAccountForm();
+  resetAccountForm(true);
   render();
 }
 
@@ -2077,6 +2155,7 @@ function editAccount(id) {
   }
 
   openAccountPanel(true);
+  showAccountForm();
 
   editingAccountId = id;
   accountNameInput.value = account.name || "";
@@ -2117,7 +2196,17 @@ async function deleteAccount(id) {
   render();
 }
 
-function resetAccountForm() {
+function showAccountForm() {
+  if (accountForm) accountForm.hidden = false;
+  if (openAccountFormBtn) openAccountFormBtn.hidden = true;
+}
+
+function hideAccountForm() {
+  if (accountForm) accountForm.hidden = true;
+  if (openAccountFormBtn) openAccountFormBtn.hidden = false;
+}
+
+function resetAccountForm(shouldHide = true) {
   editingAccountId = null;
   if (accountNameInput) {
     accountNameInput.value = "";
@@ -2128,6 +2217,7 @@ function resetAccountForm() {
   if (accountInitialInput) accountInitialInput.value = "0";
   if (saveAccountBtn) saveAccountBtn.textContent = "新增帳戶";
   if (cancelAccountEditBtn) cancelAccountEditBtn.hidden = true;
+  if (shouldHide) hideAccountForm();
 }
 
 function getAccountTypeLabel(type) {
@@ -2712,7 +2802,7 @@ function renderCreditCardDetails() {
     creditCardDetailList.innerHTML = `
       <div class="empty">
         這個月份還沒有信用卡消費。<br>
-        記帳時把「分類」選成信用卡支出，或使用包含「信用卡」的分類，就會自動整理到這裡。
+        本月紀錄中分類選「信用卡」，小分類選「中國信託、凱基、玉山」之類，就會自動整理到這裡。
       </div>
     `;
     return;
@@ -2776,30 +2866,43 @@ function renderCreditCardDetails() {
 }
 
 function isCreditCardExpenseRecord(record) {
-  if (!record || record.type !== "expense") return false;
-  const categoryName = String(record.category || "").trim();
-  return categoryName === "信用卡支出" || categoryName.includes("信用卡");
+  if (!record) return false;
+  return isCreditCardExpenseValues(record.type, record.category, record.subCategory);
 }
 
 function getCreditCardGroup(record) {
-  const categoryName = String(record.category || "信用卡支出").trim();
-  const cardName = categoryName === "信用卡支出"
-    ? (record.subCategory || "未指定卡別")
-    : (record.subCategory || categoryName);
+  const categoryName = normalizeText(record.category || "信用卡");
+  const subCategoryName = normalizeText(record.subCategory);
+  const cardName = getCreditCardNameFromRecord(categoryName, subCategoryName);
 
   return {
     key: `credit_category_${sanitizeAccountId(cardName)}`,
     name: cardName,
-    typeLabel: "信用卡分類"
+    typeLabel: "本月紀錄分類"
   };
 }
 
+function getCreditCardNameFromRecord(categoryName, subCategoryName) {
+  if (subCategoryName) return subCategoryName;
+
+  const stripped = categoryName
+    .replace(/^信用卡支出\s*[\/／｜|-]?\s*/, "")
+    .replace(/^信用卡\s*[\/／｜|-]?\s*/, "")
+    .trim();
+
+  return stripped || "未指定卡別";
+}
+
 function getCreditRecordCategoryLabel(record, groupName) {
-  const category = record.category || "其他";
-  const subCategory = record.subCategory || "";
+  const category = normalizeText(record.category || "其他");
+  const subCategory = normalizeText(record.subCategory || "");
 
   if (!subCategory || subCategory === groupName) return category;
   return `${category}／${subCategory}`;
+}
+
+function normalizeText(value) {
+  return String(value || "").trim();
 }
 
 
