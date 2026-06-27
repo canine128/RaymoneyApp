@@ -2874,9 +2874,10 @@ function getCreditCardGroup(record) {
   const categoryName = normalizeText(record.category || "信用卡");
   const subCategoryName = normalizeText(record.subCategory);
   const cardName = getCreditCardNameFromRecord(categoryName, subCategoryName);
+  const groupKey = `${categoryName}__${cardName}`;
 
   return {
-    key: `credit_category_${sanitizeAccountId(cardName)}`,
+    key: `credit_category_${encodeURIComponent(groupKey)}`,
     name: cardName,
     typeLabel: "本月紀錄分類"
   };
